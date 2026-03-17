@@ -216,6 +216,8 @@ function App() {
   const [passwordError, setPasswordError] = useState('');
   const [isHydrating, setIsHydrating] = useState(true);
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'Connecting to shared pool...' : 'Using local browser storage');
+  const [lastSyncError, setLastSyncError] = useState('');
+  const [hasLoadedSharedState, setHasLoadedSharedState] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -257,6 +259,7 @@ function App() {
       }
 
       if (error) {
+        setLastSyncError(error.message);
         setSyncStatus(`Supabase load failed: ${error.message}`);
         setIsHydrating(false);
         return;
@@ -266,8 +269,11 @@ function App() {
         const nextState = sanitizeState(data.state);
         setState(nextState);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+        setHasLoadedSharedState(true);
+        setLastSyncError('');
         setSyncStatus('Shared pool is live for all users');
       } else {
+        setLastSyncError('');
         setSyncStatus('Supabase ready, waiting for first shared save');
       }
 
@@ -297,10 +303,13 @@ function App() {
       );
 
       if (error) {
+        setLastSyncError(error.message);
         setSyncStatus(`Supabase sync failed: ${error.message}`);
         return;
       }
 
+      setHasLoadedSharedState(true);
+      setLastSyncError('');
       setSyncStatus('Shared pool is live for all users');
     }, 500);
 
@@ -495,6 +504,27 @@ function App() {
             </div>
           </div>
           <p className="sync-status">{syncStatus}</p>
+          <div className="debug-panel" aria-label="Supabase diagnostics">
+            <p className="debug-title">Supabase Diagnostics</p>
+            <dl className="debug-grid">
+              <div>
+                <dt>Env Loaded</dt>
+                <dd>{isSupabaseConfigured ? 'Yes' : 'No'}</dd>
+              </div>
+              <div>
+                <dt>Shared State Loaded</dt>
+                <dd>{hasLoadedSharedState ? 'Yes' : 'No'}</dd>
+              </div>
+              <div>
+                <dt>Hydrating</dt>
+                <dd>{isHydrating ? 'Yes' : 'No'}</dd>
+              </div>
+              <div>
+                <dt>Last Error</dt>
+                <dd>{lastSyncError || 'None'}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
         <div className="hero-actions">
           {adminUnlocked ? (
