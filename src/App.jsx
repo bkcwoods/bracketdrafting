@@ -1,3 +1,4 @@
+console.log('APP VERSION WITH SUPABASE LOGGING LOADED');
 import { useEffect, useMemo, useState } from 'react';
 import { teams } from './data/teams';
 import brandLogo from './assets/bracket-drafting-logo.svg';
@@ -256,7 +257,7 @@ function App() {
       }
 
       if (error) {
-        setSyncStatus('Supabase unavailable, using local browser storage');
+        setSyncStatus(`Supabase load failed: ${error.message}`);
         setIsHydrating(false);
         return;
       }
@@ -296,13 +297,11 @@ function App() {
       );
 
       if (error) {
-        setSyncStatus('Could not sync to Supabase, changes are local on this device');
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        setSyncStatus(`Supabase sync failed: ${error.message}`);
         return;
       }
 
       setSyncStatus('Shared pool is live for all users');
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }, 500);
 
     return () => window.clearTimeout(timeoutId);

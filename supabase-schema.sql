@@ -19,6 +19,12 @@ for select
 to anon, authenticated
 using (true);
 
+create policy "Allow public insert access to app_state"
+on public.app_state
+for insert
+to anon, authenticated
+with check (id = 'main');
+
 create policy "Allow public update access to app_state"
 on public.app_state
 for update
