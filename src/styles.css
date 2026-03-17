@@ -147,6 +147,12 @@ a {
   color: var(--text-soft);
 }
 
+.sync-status {
+  margin: 14px 0 0;
+  color: #b8dfff;
+  font-size: 0.9rem;
+}
+
 .hero-copy {
   max-width: 62ch;
   font-size: 1.02rem;

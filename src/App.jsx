@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { teams } from './data/teams';
 import brandLogo from './assets/bracket-drafting-logo.svg';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 const STORAGE_KEY = 'march-madness-pool-state-v2026';
 const ADMIN_ACCESS_KEY = 'bracket-drafting-admin-access';
 const ADMIN_PASSWORD = 'BracketDrafting2026';
+const SUPABASE_ROW_ID = 'main';
 const pageConfigs = [
   { key: 'dashboard', hash: '#dashboard', label: 'Dashboard' },
   { key: 'setup', hash: '#setup', label: 'Pool Setup' },
@@ -211,9 +213,13 @@ function App() {
   const [adminUnlocked, setAdminUnlocked] = useState(loadAdminAccess);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [isHydrating, setIsHydrating] = useState(true);
+  const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'Connecting to shared pool...' : 'Using local browser storage');
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!isSupabaseConfigured || !supabase) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
   }, [state]);
 
   useEffect(() => {
@@ -229,6 +235,78 @@ function App() {
 
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSharedState() {
+      if (!isSupabaseConfigured || !supabase) {
+        setIsHydrating(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('app_state')
+        .select('state')
+        .eq('id', SUPABASE_ROW_ID)
+        .maybeSingle();
+
+      if (ignore) {
+        return;
+      }
+
+      if (error) {
+        setSyncStatus('Supabase unavailable, using local browser storage');
+        setIsHydrating(false);
+        return;
+      }
+
+      if (data?.state) {
+        const nextState = sanitizeState(data.state);
+        setState(nextState);
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+        setSyncStatus('Shared pool is live for all users');
+      } else {
+        setSyncStatus('Supabase ready, waiting for first shared save');
+      }
+
+      setIsHydrating(false);
+    }
+
+    loadSharedState();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isHydrating || !isSupabaseConfigured || !supabase) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      const { error } = await supabase.from('app_state').upsert(
+        {
+          id: SUPABASE_ROW_ID,
+          state,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' },
+      );
+
+      if (error) {
+        setSyncStatus('Could not sync to Supabase, changes are local on this device');
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        return;
+      }
+
+      setSyncStatus('Shared pool is live for all users');
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isHydrating, state]);
 
   const teamPoints = useMemo(() => {
     const scores = Object.fromEntries(teams.map((team) => [team.id, 0]));
@@ -417,6 +495,7 @@ function App() {
               <span>games scored so far</span>
             </div>
           </div>
+          <p className="sync-status">{syncStatus}</p>
         </div>
         <div className="hero-actions">
           {adminUnlocked ? (
